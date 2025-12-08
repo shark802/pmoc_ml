@@ -2089,7 +2089,7 @@ function start_flask_service() {
     }
 }
 
-function call_flask_service($url, $data = [], $method = 'POST', $timeout = 120) {
+function call_flask_service($url, $data = [], $method = 'POST', $timeout = 120, $max_retries = 3) {
     // CRITICAL: Log function entry
     error_log("=========================================");
     error_log("DEBUG - call_flask_service() CALLED");
@@ -2409,11 +2409,30 @@ function call_flask_service($url, $data = [], $method = 'POST', $timeout = 120) 
         }
         
         if ($http_code !== 200) {
+            // Handle HTTP 503 (Service Unavailable) with retry logic
+            if ($http_code === 503 && $max_retries > 0) {
+                error_log("Flask service returned HTTP 503 (Service Unavailable). Retrying... ($max_retries retries left)");
+                
+                // Exponential backoff: wait 1s, 2s, 4s
+                $wait_time = pow(2, 3 - $max_retries); // 1, 2, or 4 seconds
+                sleep($wait_time);
+                
+                // Retry the request
+                return call_flask_service($url, $data, $method, $timeout, $max_retries - 1);
+            }
+            
             error_log("Flask service returned HTTP $http_code: " . substr($response, 0, 200));
             
             // Try to parse the error message from Flask response
             $decoded = json_decode($response, true);
             if (json_last_error() === JSON_ERROR_NONE && isset($decoded['message'])) {
+                // For 503 errors, provide more helpful message
+                if ($http_code === 503) {
+                    return [
+                        'status' => 'error', 
+                        'message' => 'Flask service temporarily unavailable (HTTP 503). The Heroku service may be starting up or experiencing high load. Please try again in a few moments.'
+                    ];
+                }
                 return ['status' => 'error', 'message' => $decoded['message']];
             }
             
