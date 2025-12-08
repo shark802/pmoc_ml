@@ -8,20 +8,21 @@
 define('ML_AUTO_ANALYSIS_ENABLED', true);  // Set to false to disable automatic analysis
 
 // ML Service Settings - Auto-detect localhost vs production
+// Heroku Flask Service Endpoint
+$heroku_endpoint = 'https://endpoint-pmoc-a0a6708d039f.herokuapp.com';
+
 // Check if running on localhost (development) or production
-$is_localhost = (
-    $_SERVER['HTTP_HOST'] === 'localhost' || 
-    $_SERVER['HTTP_HOST'] === '127.0.0.1' ||
-    strpos($_SERVER['HTTP_HOST'], 'localhost:') === 0 ||
-    strpos($_SERVER['HTTP_HOST'], '127.0.0.1:') === 0
+$is_production = (
+    strpos($_SERVER['HTTP_HOST'], 'pmoc.bccbsis.com') !== false ||
+    strpos($_SERVER['HTTP_HOST'], 'bccbsis.com') !== false
 );
 
-if ($is_localhost) {
+if ($is_production) {
+    // Production - use Heroku service
+    define('ML_SERVICE_URL', $heroku_endpoint);
+} else {
     // Local development - use local Flask service
     define('ML_SERVICE_URL', 'http://127.0.0.1:5000');
-} else {
-    // Production - use Heroku service
-    define('ML_SERVICE_URL', 'https://endpoint-pmoc-a0a6708d039f.herokuapp.com');
 }
 
 define('ML_SERVICE_TIMEOUT', 30); // seconds
