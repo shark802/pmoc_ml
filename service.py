@@ -2989,21 +2989,59 @@ def generate_counseling_reasoning(focus_categories, category_scores, ml_confiden
     else:
         return f"Counseling recommendation based on: {'; '.join(reasoning_parts)}"
 
+# Initialize service on import (for gunicorn on Heroku)
+def initialize_service():
+    """Initialize the service - load categories, questions, and models"""
+    print("Initializing Counseling Topics Service...")
+    
+    try:
+        # Load MEAI categories from database
+        load_categories_from_db()
+        print(f"MEAI Categories loaded: {len(MEAI_CATEGORIES)} categories")
+        
+        # Load MEAI questions and sub-questions from database
+        load_questions_from_db()
+        print(f"MEAI Questions loaded: {len(MEAI_QUESTIONS)} categories with questions")
+        
+        # Load existing models if available
+        models_loaded = load_ml_models()
+        
+        if models_loaded:
+            print("✅ All ML models loaded successfully")
+        else:
+            print("⚠️  ML models not loaded - training required")
+            print("   Use /train endpoint to train models")
+        
+        print("Service initialized successfully!")
+        return True
+    except Exception as e:
+        print(f"❌ Error initializing service: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# Initialize on module load (for gunicorn)
+if not MEAI_CATEGORIES:
+    initialize_service()
+
 if __name__ == '__main__':
-    print("Starting Counseling Topics Service...")
+    # Only run Flask dev server if running directly (not via gunicorn)
+    print("Starting Counseling Topics Service (development mode)...")
     
-    # Load MEAI categories from database
-    load_categories_from_db()
-    print(f"MEAI Categories: {MEAI_CATEGORIES}")
-    
-    # Load MEAI questions and sub-questions from database
-    load_questions_from_db()
-    
-    # Load existing models if available
-    load_ml_models()
+    # Initialize if not already done
+    if not MEAI_CATEGORIES:
+        initialize_service()
     
     print("Service ready!")
     print("Counseling Topics Models: Available" if all(model is not None for model in ml_models.values()) else "Counseling Topics Models: Training needed")
     print(f"Analysis Method: Random Forest Counseling Topics with {len(MEAI_CATEGORIES)} MEAI categories")
     
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # Heroku configuration: use PORT environment variable, default to 5000 for local
+    port = int(os.environ.get('PORT', 5000))
+    # On Heroku, bind to 0.0.0.0 to accept connections from any IP
+    # On localhost, use 127.0.0.1 for security
+    host = '0.0.0.0' if os.environ.get('DYNO') else '127.0.0.1'
+    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
+    print(f"Starting Flask service on {host}:{port} (debug={debug})")
+    app.run(host=host, port=port, debug=debug)
