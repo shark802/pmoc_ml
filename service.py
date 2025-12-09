@@ -65,17 +65,20 @@ def get_db_config():
         if db_host in ['localhost', '127.0.0.1']:
             return {
                 'host': 'localhost',
-                'user': 'root',
-                'password': '',
-                'database': 'u520834156_DBpmoc25',
+                'user': os.getenv('DB_USER', 'root'),
+                'password': os.getenv('DB_PASSWORD', ''),
+                'database': os.getenv('DB_NAME', 'u520834156_DBpmoc25'),
                 'charset': 'utf8mb4'
             }
         else:
-            # Use remote with custom host
+            # Use remote with custom host - MUST use environment variables
+            password = os.getenv('DB_PASSWORD')
+            if not password:
+                raise ValueError("CRITICAL: DB_PASSWORD environment variable is not set in production!")
             return {
                 'host': db_host,
                 'user': os.getenv('DB_USER', 'u520834156_userPmoc'),
-                'password': os.getenv('DB_PASSWORD', 'NzkN5arIO7@'),
+                'password': password,
                 'database': os.getenv('DB_NAME', 'u520834156_DBpmoc25'),
                 'charset': 'utf8mb4'
             }
@@ -89,20 +92,23 @@ def get_db_config():
     
     # If explicitly set to production or Heroku, use remote
     if is_production or is_heroku or env == 'production':
+        password = os.getenv('DB_PASSWORD')
+        if not password:
+            raise ValueError("CRITICAL: DB_PASSWORD environment variable is not set in production!")
         return {
-            'host': 'srv1322.hstgr.io',
-            'user': 'u520834156_userPmoc',
-            'password': 'NzkN5arIO7@',
-            'database': 'u520834156_DBpmoc25',
+            'host': os.getenv('DB_HOST', 'srv1322.hstgr.io'),
+            'user': os.getenv('DB_USER', 'u520834156_userPmoc'),
+            'password': password,
+            'database': os.getenv('DB_NAME', 'u520834156_DBpmoc25'),
             'charset': 'utf8mb4'
         }
     
     # Default to local for development (localhost)
     return {
         'host': 'localhost',
-        'user': 'root',
-        'password': '',
-        'database': 'u520834156_DBpmoc25',
+        'user': os.getenv('DB_USER', 'root'),
+        'password': os.getenv('DB_PASSWORD', ''),
+        'database': os.getenv('DB_NAME', 'u520834156_DBpmoc25'),
         'charset': 'utf8mb4'
     }
 

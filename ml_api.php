@@ -27,6 +27,10 @@ register_shutdown_function(function() {
     }
 });
 
+// Load environment variables and debug mode
+require_once __DIR__ . '/../includes/env_loader.php';
+require_once __DIR__ . '/../includes/debug_helper.php';
+
 // Set JSON header
 header('Content-Type: application/json');
 
@@ -43,12 +47,8 @@ if (in_array($action, ['status', 'analyze', 'get_analysis', 'analyze_batch', 'tr
     require_once __DIR__ . '/../includes/session.php';
 }
 
-// CRITICAL: Test log to verify error_log is working
-error_log("=========================================");
-error_log("DEBUG - ml_api.php LOADED - Action: " . ($action ?? 'NONE'));
-error_log("DEBUG - Time: " . date('Y-m-d H:i:s'));
-error_log("DEBUG - Error log location: " . ini_get('error_log'));
-error_log("=========================================");
+// Debug logging only in debug mode
+debug_log("ml_api.php LOADED - Action: " . ($action ?? 'NONE'));
 
 switch($action) {
     case 'analyze':
@@ -58,7 +58,7 @@ switch($action) {
         get_existing_analysis();
         break;
     case 'analyze_batch':
-        error_log("DEBUG - ml_api.php - Routing to analyze_batch()");
+        debug_log("ml_api.php - Routing to analyze_batch()");
         analyze_batch();
         break;
     case 'train':
@@ -96,19 +96,19 @@ function analyze_couple() {
             return;
         }
         
-        // CRITICAL DEBUG: Log what get_couple_data() actually returned
-        error_log("DEBUG - analyze_couple - get_couple_data() returned:");
-        error_log("DEBUG -   couple_data type: " . gettype($couple_data));
-        error_log("DEBUG -   couple_data keys: " . json_encode(array_keys($couple_data)));
+        // Log what get_couple_data() returned (debug mode only)
+        debug_log("analyze_couple - get_couple_data() returned:");
+        debug_log("  couple_data type: " . gettype($couple_data));
+        debug_log("  couple_data keys: " . json_encode(array_keys($couple_data)));
         if (isset($couple_data['male_responses'])) {
-            error_log("DEBUG -   couple_data['male_responses'] type: " . gettype($couple_data['male_responses']) . ", count: " . count($couple_data['male_responses']));
+            debug_log("  couple_data['male_responses'] type: " . gettype($couple_data['male_responses']) . ", count: " . count($couple_data['male_responses']));
         } else {
-            error_log("DEBUG -   couple_data['male_responses'] is NOT SET");
+            error_log_safe("couple_data['male_responses'] is NOT SET");
         }
         if (isset($couple_data['female_responses'])) {
-            error_log("DEBUG -   couple_data['female_responses'] type: " . gettype($couple_data['female_responses']) . ", count: " . count($couple_data['female_responses']));
+            debug_log("  couple_data['female_responses'] type: " . gettype($couple_data['female_responses']) . ", count: " . count($couple_data['female_responses']));
         } else {
-            error_log("DEBUG -   couple_data['female_responses'] is NOT SET");
+            error_log_safe("couple_data['female_responses'] is NOT SET");
         }
         
         // CRITICAL: Ensure male_responses and female_responses are populated
@@ -119,58 +119,58 @@ function analyze_couple() {
         
         if (isset($couple_data['male_responses'])) {
             $male_responses = $couple_data['male_responses'];
-            error_log("DEBUG - Extracted male_responses: count=" . count($male_responses));
+            debug_log("Extracted male_responses: count=" . count($male_responses));
         } else {
-            error_log("ERROR - couple_data does NOT have 'male_responses' key!");
+            error_log_safe("couple_data does NOT have 'male_responses' key!");
         }
         if (isset($couple_data['female_responses'])) {
             $female_responses = $couple_data['female_responses'];
-            error_log("DEBUG - Extracted female_responses: count=" . count($female_responses));
+            debug_log("Extracted female_responses: count=" . count($female_responses));
         } else {
-            error_log("ERROR - couple_data does NOT have 'female_responses' key!");
+            error_log_safe("couple_data does NOT have 'female_responses' key!");
         }
         if (isset($couple_data['questionnaire_responses'])) {
             $questionnaire_responses = $couple_data['questionnaire_responses'];
-            error_log("DEBUG - Extracted questionnaire_responses: count=" . count($questionnaire_responses));
+            debug_log("Extracted questionnaire_responses: count=" . count($questionnaire_responses));
         }
         
-        // CRITICAL DEBUG: Log what we got from get_couple_data()
-        error_log("DEBUG - analyze_couple - Extracted from couple_data:");
-        error_log("DEBUG -   couple_data keys: " . json_encode(array_keys($couple_data)));
-        error_log("DEBUG -   couple_data has 'male_responses' key: " . (isset($couple_data['male_responses']) ? 'YES' : 'NO'));
-        error_log("DEBUG -   couple_data has 'female_responses' key: " . (isset($couple_data['female_responses']) ? 'YES' : 'NO'));
-        error_log("DEBUG -   couple_data['male_responses'] type: " . (isset($couple_data['male_responses']) ? gettype($couple_data['male_responses']) : 'NOT SET'));
-        error_log("DEBUG -   couple_data['female_responses'] type: " . (isset($couple_data['female_responses']) ? gettype($couple_data['female_responses']) : 'NOT SET'));
-        error_log("DEBUG -   male_responses count: " . count($male_responses));
-        error_log("DEBUG -   female_responses count: " . count($female_responses));
-        error_log("DEBUG -   questionnaire_responses count: " . count($questionnaire_responses));
+        // Log what we got from get_couple_data() (debug mode only)
+        debug_log("analyze_couple - Extracted from couple_data:");
+        debug_log("  couple_data keys: " . json_encode(array_keys($couple_data)));
+        debug_log("  couple_data has 'male_responses' key: " . (isset($couple_data['male_responses']) ? 'YES' : 'NO'));
+        debug_log("  couple_data has 'female_responses' key: " . (isset($couple_data['female_responses']) ? 'YES' : 'NO'));
+        debug_log("  couple_data['male_responses'] type: " . (isset($couple_data['male_responses']) ? gettype($couple_data['male_responses']) : 'NOT SET'));
+        debug_log("  couple_data['female_responses'] type: " . (isset($couple_data['female_responses']) ? gettype($couple_data['female_responses']) : 'NOT SET'));
+        debug_log("  male_responses count: " . count($male_responses));
+        debug_log("  female_responses count: " . count($female_responses));
+        debug_log("  questionnaire_responses count: " . count($questionnaire_responses));
         
-        // CRITICAL: If arrays are empty, try to get them directly from couple_data again
+        // If arrays are empty, try to get them directly from couple_data again
         if (empty($male_responses) && isset($couple_data['male_responses']) && is_array($couple_data['male_responses'])) {
-            error_log("WARNING - male_responses is empty after extraction, re-extracting directly");
+            warning_log("male_responses is empty after extraction, re-extracting directly");
             $male_responses = $couple_data['male_responses'];
-            error_log("WARNING - After re-extraction, male_responses count: " . count($male_responses));
+            debug_log("After re-extraction, male_responses count: " . count($male_responses));
         }
         if (empty($female_responses) && isset($couple_data['female_responses']) && is_array($couple_data['female_responses'])) {
-            error_log("WARNING - female_responses is empty after extraction, re-extracting directly");
+            warning_log("female_responses is empty after extraction, re-extracting directly");
             $female_responses = $couple_data['female_responses'];
-            error_log("WARNING - After re-extraction, female_responses count: " . count($female_responses));
+            debug_log("After re-extraction, female_responses count: " . count($female_responses));
         }
         
         // If arrays are still empty but questionnaire_responses has data, populate them
         if (empty($male_responses) && !empty($questionnaire_responses)) {
-            error_log("WARNING - male_responses is still empty, populating from questionnaire_responses");
+            warning_log("male_responses is still empty, populating from questionnaire_responses");
             $male_responses = $questionnaire_responses; // Use same values as fallback
         }
         if (empty($female_responses) && !empty($questionnaire_responses)) {
-            error_log("WARNING - female_responses is still empty, populating from questionnaire_responses");
+            warning_log("female_responses is still empty, populating from questionnaire_responses");
             $female_responses = $questionnaire_responses; // Use same values as fallback
         }
         
         // Ensure arrays match questionnaire_responses length
         $q_count = count($questionnaire_responses);
         if (count($male_responses) != $q_count) {
-            error_log("WARNING - male_responses length mismatch ($q_count expected, got " . count($male_responses) . "), fixing...");
+            warning_log("male_responses length mismatch ($q_count expected, got " . count($male_responses) . "), fixing...");
             if (count($male_responses) < $q_count) {
                 $male_responses = array_pad($male_responses, $q_count, 3);
             } else {
@@ -178,7 +178,7 @@ function analyze_couple() {
             }
         }
         if (count($female_responses) != $q_count) {
-            error_log("WARNING - female_responses length mismatch ($q_count expected, got " . count($female_responses) . "), fixing...");
+            warning_log("female_responses length mismatch ($q_count expected, got " . count($female_responses) . "), fixing...");
             if (count($female_responses) < $q_count) {
                 $female_responses = array_pad($female_responses, $q_count, 3);
             } else {
@@ -186,56 +186,56 @@ function analyze_couple() {
             }
         }
         
-        error_log("DEBUG - analyze_couple - Final array counts before sending:");
-        error_log("DEBUG -   questionnaire_responses: " . count($questionnaire_responses));
-        error_log("DEBUG -   male_responses: " . count($male_responses));
-        error_log("DEBUG -   female_responses: " . count($female_responses));
+        debug_log("analyze_couple - Final array counts before sending:");
+        debug_log("  questionnaire_responses: " . count($questionnaire_responses));
+        debug_log("  male_responses: " . count($male_responses));
+        debug_log("  female_responses: " . count($female_responses));
         
-        // CRITICAL DEBUG: Verify variables before building analysis_data
-        error_log("DEBUG - analyze_couple - Before building analysis_data:");
-        error_log("DEBUG -   \$male_responses count: " . count($male_responses) . " (type: " . gettype($male_responses) . ")");
-        error_log("DEBUG -   \$female_responses count: " . count($female_responses) . " (type: " . gettype($female_responses) . ")");
-        error_log("DEBUG -   \$questionnaire_responses count: " . count($questionnaire_responses) . " (type: " . gettype($questionnaire_responses) . ")");
+        // Verify variables before building analysis_data (debug mode only)
+        debug_log("analyze_couple - Before building analysis_data:");
+        debug_log("  \$male_responses count: " . count($male_responses) . " (type: " . gettype($male_responses) . ")");
+        debug_log("  \$female_responses count: " . count($female_responses) . " (type: " . gettype($female_responses) . ")");
+        debug_log("  \$questionnaire_responses count: " . count($questionnaire_responses) . " (type: " . gettype($questionnaire_responses) . ")");
         
-        // CRITICAL FIX: Force populate from couple_data RIGHT BEFORE building analysis_data
+        // Force populate from couple_data RIGHT BEFORE building analysis_data
         // This ensures we have the latest values even if something reset the variables
         if (isset($couple_data['male_responses']) && is_array($couple_data['male_responses']) && count($couple_data['male_responses']) > 0) {
             $male_responses = $couple_data['male_responses'];
-            error_log("CRITICAL FIX - Forced male_responses from couple_data: " . count($male_responses) . " items");
+            debug_log("Forced male_responses from couple_data: " . count($male_responses) . " items");
         } elseif (empty($male_responses) && !empty($questionnaire_responses)) {
             $male_responses = $questionnaire_responses;
-            error_log("CRITICAL FIX - Populated male_responses from questionnaire_responses: " . count($male_responses) . " items");
+            debug_log("Populated male_responses from questionnaire_responses: " . count($male_responses) . " items");
         }
         
         if (isset($couple_data['female_responses']) && is_array($couple_data['female_responses']) && count($couple_data['female_responses']) > 0) {
             $female_responses = $couple_data['female_responses'];
-            error_log("CRITICAL FIX - Forced female_responses from couple_data: " . count($female_responses) . " items");
+            debug_log("Forced female_responses from couple_data: " . count($female_responses) . " items");
         } elseif (empty($female_responses) && !empty($questionnaire_responses)) {
             $female_responses = $questionnaire_responses;
-            error_log("CRITICAL FIX - Populated female_responses from questionnaire_responses: " . count($female_responses) . " items");
+            debug_log("Populated female_responses from questionnaire_responses: " . count($female_responses) . " items");
         }
         
         // FINAL VERIFICATION: Ensure arrays are not empty
         if (empty($male_responses) || empty($female_responses)) {
-            error_log("CRITICAL ERROR - Arrays are STILL empty after all fixes!");
-            error_log("CRITICAL ERROR - male_responses empty: " . (empty($male_responses) ? 'YES' : 'NO'));
-            error_log("CRITICAL ERROR - female_responses empty: " . (empty($female_responses) ? 'YES' : 'NO'));
-            error_log("CRITICAL ERROR - questionnaire_responses count: " . count($questionnaire_responses));
+            error_log_safe("Arrays are STILL empty after all fixes!");
+            error_log_safe("male_responses empty: " . (empty($male_responses) ? 'YES' : 'NO'));
+            error_log_safe("female_responses empty: " . (empty($female_responses) ? 'YES' : 'NO'));
+            error_log_safe("questionnaire_responses count: " . count($questionnaire_responses));
             // Last resort: use questionnaire_responses for both
             if (!empty($questionnaire_responses)) {
                 $male_responses = $questionnaire_responses;
                 $female_responses = $questionnaire_responses;
-                error_log("CRITICAL ERROR - Using questionnaire_responses as last resort for both arrays");
+                error_log_safe("Using questionnaire_responses as last resort for both arrays");
             }
         }
         
-        // CRITICAL: Store arrays in variables to ensure they're not lost
+        // Store arrays in variables to ensure they're not lost
         $male_resp_for_send = $male_responses;
         $female_resp_for_send = $female_responses;
         
-        error_log("DEBUG - analyze_couple - Stored arrays for sending:");
-        error_log("DEBUG -   male_resp_for_send count: " . count($male_resp_for_send));
-        error_log("DEBUG -   female_resp_for_send count: " . count($female_resp_for_send));
+        debug_log("analyze_couple - Stored arrays for sending:");
+        debug_log("  male_resp_for_send count: " . count($male_resp_for_send));
+        debug_log("  female_resp_for_send count: " . count($female_resp_for_send));
         
         // Prepare data for ML + AI analysis
         $analysis_data = [
@@ -259,10 +259,10 @@ function analyze_couple() {
         ];
         
         // CRITICAL: Force verify arrays are in analysis_data immediately
-        error_log("DEBUG - analyze_couple - Immediately after building analysis_data:");
-        error_log("DEBUG -   analysis_data keys: " . json_encode(array_keys($analysis_data)));
-        error_log("DEBUG -   male_responses in analysis_data: " . (isset($analysis_data['male_responses']) ? 'YES (' . count($analysis_data['male_responses']) . ' items)' : 'NO'));
-        error_log("DEBUG -   female_responses in analysis_data: " . (isset($analysis_data['female_responses']) ? 'YES (' . count($analysis_data['female_responses']) . ' items)' : 'NO'));
+        debug_log("analyze_couple - Immediately after building analysis_data:");
+        debug_log("  analysis_data keys: " . json_encode(array_keys($analysis_data)));
+        debug_log("  male_responses in analysis_data: " . (isset($analysis_data['male_responses']) ? 'YES (' . count($analysis_data['male_responses']) . ' items)' : 'NO'));
+        debug_log("  female_responses in analysis_data: " . (isset($analysis_data['female_responses']) ? 'YES (' . count($analysis_data['female_responses']) . ' items)' : 'NO'));
         
         // CRITICAL: If arrays are missing, force them back in
         if (!isset($analysis_data['male_responses']) || empty($analysis_data['male_responses']) || count($analysis_data['male_responses']) == 0) {
@@ -284,10 +284,10 @@ function analyze_couple() {
         }
         
         // CRITICAL DEBUG: Verify arrays are in analysis_data immediately after building
-        error_log("DEBUG - analyze_couple - Immediately after building analysis_data:");
-        error_log("DEBUG -   analysis_data['male_responses'] count: " . count($analysis_data['male_responses'] ?? []));
-        error_log("DEBUG -   analysis_data['female_responses'] count: " . count($analysis_data['female_responses'] ?? []));
-        error_log("DEBUG -   isset(analysis_data['male_responses']): " . (isset($analysis_data['male_responses']) ? 'YES' : 'NO'));
+        debug_log("analyze_couple - Immediately after building analysis_data:");
+        debug_log("  analysis_data['male_responses'] count: " . count($analysis_data['male_responses'] ?? []));
+        debug_log("  analysis_data['female_responses'] count: " . count($analysis_data['female_responses'] ?? []));
+        debug_log("  isset(analysis_data['male_responses']): " . (isset($analysis_data['male_responses']) ? 'YES' : 'NO'));
         error_log("DEBUG -   isset(analysis_data['female_responses']): " . (isset($analysis_data['female_responses']) ? 'YES' : 'NO'));
         
         // DEBUG: Log the data being sent to Flask
@@ -457,21 +457,27 @@ function get_couple_data($access_id) {
         
         // DEBUG: Count total responses
         $total_responses = $result->num_rows;
-        error_log("DEBUG - Total responses from database: $total_responses for access_id: $access_id");
+        debug_log("Total responses from database: $total_responses for access_id: $access_id");
         
-        // CRITICAL DEBUG: Sample first few rows to see actual data structure
+        // Sample first few rows to see actual data structure (only in debug mode)
         $sample_rows = [];
-        $temp_result = $conn->query("
-            SELECT response, category_id, question_id, sub_question_id, respondent
-            FROM couple_responses
-            WHERE access_id = '$access_id'
-            LIMIT 5
-        ");
-        if ($temp_result) {
-            while ($sample = $temp_result->fetch_assoc()) {
-                $sample_rows[] = $sample;
+        if (defined('DEBUG_MODE') && DEBUG_MODE) {
+            $stmt = $conn->prepare("
+                SELECT response, category_id, question_id, sub_question_id, respondent
+                FROM couple_responses
+                WHERE access_id = ?
+                LIMIT 5
+            ");
+            $stmt->bind_param("i", $access_id);
+            $stmt->execute();
+            $temp_result = $stmt->get_result();
+            if ($temp_result) {
+                while ($sample = $temp_result->fetch_assoc()) {
+                    $sample_rows[] = $sample;
+                }
+                error_log("DEBUG - Sample rows from couple_responses table: " . json_encode($sample_rows));
             }
-            error_log("DEBUG - Sample rows from couple_responses table: " . json_encode($sample_rows));
+            $stmt->close();
         }
         
         // Build response map: (category_id, question_id, sub_question_id) -> {male: val, female: val}

@@ -43,7 +43,7 @@ Set your database configuration (replace with your actual database credentials):
 ```bash
 heroku config:set DB_HOST=srv1322.hstgr.io
 heroku config:set DB_USER=u520834156_userPmoc
-heroku config:set DB_PASSWORD=NzkN5arIO7@
+heroku config:set DB_PASSWORD=your_database_password_here
 heroku config:set DB_NAME=u520834156_DBpmoc25
 ```
 
