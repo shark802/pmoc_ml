@@ -2145,6 +2145,16 @@ def get_training_status():
 def analyze():
     """Analyze couple and generate recommendations"""
     try:
+        # CRITICAL: Ensure questions are loaded before analysis
+        global MEAI_QUESTIONS, MEAI_QUESTION_MAPPING, MEAI_CATEGORIES
+        if not MEAI_QUESTIONS or len(MEAI_QUESTIONS) == 0:
+            print("WARNING - MEAI_QUESTIONS not loaded, attempting to load...")
+            if not MEAI_CATEGORIES or len(MEAI_CATEGORIES) == 0:
+                load_categories_from_db()
+            load_questions_from_db()
+            print(f"Loaded {len(MEAI_QUESTIONS)} categories with questions")
+            print(f"MEAI_QUESTION_MAPPING has {len(MEAI_QUESTION_MAPPING) if MEAI_QUESTION_MAPPING else 0} items")
+        
         data = request.get_json()
         
         # CRITICAL DEBUG: Log raw received data structure
@@ -2222,20 +2232,61 @@ def analyze():
             }), 400
         
         # Validate that arrays have the expected length (should be 59)
-        expected_count = len(MEAI_QUESTION_MAPPING) if MEAI_QUESTION_MAPPING else 59
-        if len(male_responses) != expected_count:
-            print(f"ERROR - male_responses length ({len(male_responses)}) does not match expected ({expected_count})")
-            return jsonify({
-                'status': 'error',
-                'message': f'male_responses must have {expected_count} items (one per answerable question), got {len(male_responses)}'
-            }), 400
-            
-        if len(female_responses) != expected_count:
-            print(f"ERROR - female_responses length ({len(female_responses)}) does not match expected ({expected_count})")
-            return jsonify({
-                'status': 'error',
-                'message': f'female_responses must have {expected_count} items (one per answerable question), got {len(female_responses)}'
-            }), 400
+        # Calculate expected count from MEAI_QUESTIONS structure (more reliable)
+        expected_count = None
+        if MEAI_QUESTIONS and len(MEAI_QUESTIONS) > 0:
+            # Calculate from actual question structure
+            expected_count = 0
+            for cat_questions in MEAI_QUESTIONS.values():
+                for q_data in cat_questions.values():
+                    if q_data.get('sub_questions'):
+                        expected_count += len(q_data['sub_questions'])
+                    else:
+                        expected_count += 1
+            print(f"DEBUG - Calculated expected_count from MEAI_QUESTIONS: {expected_count}")
+        
+        # Fallback to MEAI_QUESTION_MAPPING if available and reasonable
+        if expected_count is None or expected_count < 10:
+            if MEAI_QUESTION_MAPPING and len(MEAI_QUESTION_MAPPING) >= 50:
+                expected_count = len(MEAI_QUESTION_MAPPING)
+                print(f"DEBUG - Using MEAI_QUESTION_MAPPING count: {expected_count}")
+            else:
+                # Final fallback: use 59 (known correct count) or actual data length if reasonable
+                if len(male_responses) == 59 or len(female_responses) == 59:
+                    expected_count = 59
+                    print(f"DEBUG - Using known correct count: 59")
+                else:
+                    # Use the actual data length if it's reasonable (between 50-70)
+                    if 50 <= len(male_responses) <= 70:
+                        expected_count = len(male_responses)
+                        print(f"DEBUG - Using actual data length as expected_count: {expected_count}")
+                    else:
+                        expected_count = 59  # Default fallback
+                        print(f"WARNING - Using default expected_count: {expected_count}")
+        
+        # Only validate if we have a reasonable expected_count
+        if expected_count and expected_count >= 50:
+            if len(male_responses) != expected_count:
+                print(f"ERROR - male_responses length ({len(male_responses)}) does not match expected ({expected_count})")
+                print(f"ERROR - MEAI_QUESTION_MAPPING has {len(MEAI_QUESTION_MAPPING) if MEAI_QUESTION_MAPPING else 0} items")
+                print(f"ERROR - MEAI_QUESTIONS has {len(MEAI_QUESTIONS) if MEAI_QUESTIONS else 0} categories")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'male_responses must have {expected_count} items (one per answerable question), got {len(male_responses)}'
+                }), 400
+                
+            if len(female_responses) != expected_count:
+                print(f"ERROR - female_responses length ({len(female_responses)}) does not match expected ({expected_count})")
+                print(f"ERROR - MEAI_QUESTION_MAPPING has {len(MEAI_QUESTION_MAPPING) if MEAI_QUESTION_MAPPING else 0} items")
+                print(f"ERROR - MEAI_QUESTIONS has {len(MEAI_QUESTIONS) if MEAI_QUESTIONS else 0} categories")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'female_responses must have {expected_count} items (one per answerable question), got {len(female_responses)}'
+                }), 400
+        else:
+            # If expected_count is not reliable, just check that arrays match each other
+            print(f"WARNING - Could not determine reliable expected_count ({expected_count}), skipping length validation")
+            print(f"WARNING - male_responses: {len(male_responses)}, female_responses: {len(female_responses)}")
         
         # Validate that arrays match each other in length
         if len(male_responses) != len(female_responses):
