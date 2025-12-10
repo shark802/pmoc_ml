@@ -1932,6 +1932,52 @@ def load_ml_models():
             print(f"Warning: risk_encoder.pkl not found in {script_dir}")
         
         if ml_models.get('risk_model') and ml_models.get('category_model') and ml_models.get('risk_encoder'):
+            # Validate feature counts match expected values
+            # Expected: 11 demographic + 118 responses (59 male + 59 female) + 6 personalized = 135 features
+            expected_feature_count = 135
+            
+            # Check risk model
+            risk_model = ml_models['risk_model']
+            risk_expected = None
+            if hasattr(risk_model, 'n_features_in_'):
+                risk_expected = risk_model.n_features_in_
+            elif hasattr(risk_model, 'n_features_'):
+                risk_expected = risk_model.n_features_
+            elif hasattr(risk_model, 'best_estimator_'):
+                if hasattr(risk_model.best_estimator_, 'n_features_in_'):
+                    risk_expected = risk_model.best_estimator_.n_features_in_
+                elif hasattr(risk_model.best_estimator_, 'n_features_'):
+                    risk_expected = risk_model.best_estimator_.n_features_
+            
+            # Check category model
+            category_model = ml_models['category_model']
+            category_expected = None
+            if hasattr(category_model, 'estimator'):
+                estimator = category_model.estimator
+                if hasattr(estimator, 'n_features_in_'):
+                    category_expected = estimator.n_features_in_
+                elif hasattr(estimator, 'n_features_'):
+                    category_expected = estimator.n_features_
+            elif hasattr(category_model, 'n_features_in_'):
+                category_expected = category_model.n_features_in_
+            elif hasattr(category_model, 'n_features_'):
+                category_expected = category_model.n_features_
+            
+            # Warn if feature counts don't match
+            if risk_expected is not None and risk_expected != expected_feature_count:
+                print(f"⚠️  WARNING: Risk model expects {risk_expected} features, but current code generates {expected_feature_count} features!")
+                print(f"⚠️  The model needs to be retrained. Please use the 'Train Models' button in the dashboard.")
+                print(f"⚠️  Predictions will fail until the model is retrained with the correct feature count.")
+            
+            if category_expected is not None and category_expected != expected_feature_count:
+                print(f"⚠️  WARNING: Category model expects {category_expected} features, but current code generates {expected_feature_count} features!")
+                print(f"⚠️  The model needs to be retrained. Please use the 'Train Models' button in the dashboard.")
+                print(f"⚠️  Predictions will fail until the model is retrained with the correct feature count.")
+            
+            if (risk_expected is not None and risk_expected == expected_feature_count) and \
+               (category_expected is not None and category_expected == expected_feature_count):
+                print(f"✓ Feature count validation passed: Models expect {expected_feature_count} features (matches current code)")
+            
             print("All ML models loaded successfully")
             return True
         else:
@@ -2040,10 +2086,54 @@ def status():
     """Check service status"""
     ml_trained = all(model is not None for model in ml_models.values())
     
+    # Check feature count compatibility
+    expected_feature_count = 135  # 11 demographic + 118 responses + 6 personalized
+    feature_mismatch = False
+    risk_model_features = None
+    category_model_features = None
+    
+    if ml_models.get('risk_model'):
+        risk_model = ml_models['risk_model']
+        if hasattr(risk_model, 'n_features_in_'):
+            risk_model_features = risk_model.n_features_in_
+        elif hasattr(risk_model, 'n_features_'):
+            risk_model_features = risk_model.n_features_
+        elif hasattr(risk_model, 'best_estimator_'):
+            if hasattr(risk_model.best_estimator_, 'n_features_in_'):
+                risk_model_features = risk_model.best_estimator_.n_features_in_
+            elif hasattr(risk_model.best_estimator_, 'n_features_'):
+                risk_model_features = risk_model.best_estimator_.n_features_
+        
+        if risk_model_features is not None and risk_model_features != expected_feature_count:
+            feature_mismatch = True
+    
+    if ml_models.get('category_model'):
+        category_model = ml_models['category_model']
+        if hasattr(category_model, 'estimator'):
+            estimator = category_model.estimator
+            if hasattr(estimator, 'n_features_in_'):
+                category_model_features = estimator.n_features_in_
+            elif hasattr(estimator, 'n_features_'):
+                category_model_features = estimator.n_features_
+        elif hasattr(category_model, 'n_features_in_'):
+            category_model_features = category_model.n_features_in_
+        elif hasattr(category_model, 'n_features_'):
+            category_model_features = category_model.n_features_
+        
+        if category_model_features is not None and category_model_features != expected_feature_count:
+            feature_mismatch = True
+    
     return jsonify({
         'status': 'success',
         'service': 'Counseling Topics Service',
-        'ml_trained': ml_trained
+        'ml_trained': ml_trained,
+        'feature_validation': {
+            'expected_features': expected_feature_count,
+            'risk_model_features': int(risk_model_features) if risk_model_features is not None else None,
+            'category_model_features': int(category_model_features) if category_model_features is not None else None,
+            'mismatch_detected': feature_mismatch,
+            'needs_retraining': feature_mismatch
+        }
     })
 
 def train_models_async():
