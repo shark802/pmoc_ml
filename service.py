@@ -2530,38 +2530,64 @@ def analyze():
         
         # CRITICAL: Validate feature count matches model's expected features
         if ml_models['risk_model'] is not None:
+            print(f"DEBUG - Validating feature count against risk model")
+            print(f"DEBUG - Model type: {type(ml_models['risk_model'])}")
+            print(f"DEBUG - Model has n_features_in_: {hasattr(ml_models['risk_model'], 'n_features_in_')}")
+            print(f"DEBUG - Model has n_features_: {hasattr(ml_models['risk_model'], 'n_features_')}")
+            
             # Check if model has n_features_in_ attribute (sklearn 0.24+)
             if hasattr(ml_models['risk_model'], 'n_features_in_'):
                 expected_features = ml_models['risk_model'].n_features_in_
+                print(f"DEBUG - Found n_features_in_: {expected_features}")
             elif hasattr(ml_models['risk_model'], 'n_features_'):
                 expected_features = ml_models['risk_model'].n_features_
+                print(f"DEBUG - Found n_features_: {expected_features}")
             else:
                 # Try to infer from the model's estimator (for GridSearchCV)
                 if hasattr(ml_models['risk_model'], 'best_estimator_'):
+                    print(f"DEBUG - Model has best_estimator_, checking estimator attributes")
                     if hasattr(ml_models['risk_model'].best_estimator_, 'n_features_in_'):
                         expected_features = ml_models['risk_model'].best_estimator_.n_features_in_
+                        print(f"DEBUG - Found best_estimator_.n_features_in_: {expected_features}")
                     elif hasattr(ml_models['risk_model'].best_estimator_, 'n_features_'):
                         expected_features = ml_models['risk_model'].best_estimator_.n_features_
+                        print(f"DEBUG - Found best_estimator_.n_features_: {expected_features}")
                     else:
                         expected_features = None
+                        print(f"WARNING - Could not find feature count in best_estimator_")
                 else:
                     expected_features = None
+                    print(f"WARNING - Model does not have n_features_in_, n_features_, or best_estimator_ attributes")
+        else:
+            print(f"ERROR - Risk model is None, cannot validate feature count")
+            expected_features = None
             
             actual_features = features_array.shape[1]
             
             if expected_features is not None and actual_features != expected_features:
+                # Detailed diagnostic information
+                print(f"ERROR - Feature count mismatch detected!")
+                print(f"ERROR - Model type: {type(ml_models['risk_model'])}")
+                print(f"ERROR - Model has n_features_in_: {hasattr(ml_models['risk_model'], 'n_features_in_')}")
+                print(f"ERROR - Model has n_features_: {hasattr(ml_models['risk_model'], 'n_features_')}")
+                print(f"ERROR - Model has best_estimator_: {hasattr(ml_models['risk_model'], 'best_estimator_')}")
+                print(f"ERROR - Expected features (from model): {expected_features}")
+                print(f"ERROR - Actual features (from data): {actual_features}")
+                print(f"ERROR - Feature breakdown:")
+                print(f"ERROR -   Demographic features: 11")
+                print(f"ERROR -   Male responses: {len(male_responses)} (first 5: {male_responses[:5] if len(male_responses) >= 5 else male_responses})")
+                print(f"ERROR -   Female responses: {len(female_responses)} (first 5: {female_responses[:5] if len(female_responses) >= 5 else female_responses})")
+                print(f"ERROR -   Personalized features: 6")
+                print(f"ERROR -   Total calculated: {11 + len(male_responses) + len(female_responses) + 6}")
+                print(f"ERROR -   Total actual: {len(features)}")
+                
                 error_msg = (
                     f"Feature count mismatch: Model expects {expected_features} features, "
                     f"but received {actual_features} features. "
                     f"This usually means the model was trained with a different feature set. "
                     f"Please retrain the model using the 'Train Models' button in the dashboard."
                 )
-                print(f"ERROR - {error_msg}")
-                print(f"ERROR - Feature breakdown: {len(features)} total features")
-                print(f"ERROR -   Demographic: 11")
-                print(f"ERROR -   Male responses: {len(male_responses)}")
-                print(f"ERROR -   Female responses: {len(female_responses)}")
-                print(f"ERROR -   Personalized: 6")
+                
                 return jsonify({
                     'status': 'error',
                     'message': error_msg,
@@ -2574,11 +2600,20 @@ def analyze():
                             'female_responses': len(female_responses),
                             'personalized': 6,
                             'total': len(features)
+                        },
+                        'diagnostic': {
+                            'model_type': str(type(ml_models['risk_model'])),
+                            'male_responses_sample': male_responses[:5] if len(male_responses) >= 5 else male_responses,
+                            'female_responses_sample': female_responses[:5] if len(female_responses) >= 5 else female_responses
                         }
                     }
                 }), 400
             elif expected_features is not None:
                 print(f"DEBUG - Feature count validation passed: {actual_features} features (expected: {expected_features})")
+            else:
+                print(f"WARNING - Could not determine model's expected feature count (model attributes not found)")
+                print(f"WARNING - Proceeding with prediction, but it may fail if feature count is incorrect")
+                print(f"WARNING - Actual features being sent: {actual_features}")
         
         # HYBRID APPROACH: Calculate actual risk level from disagreement ratio AND use ML prediction
         # This helps catch cases where the model might be biased
