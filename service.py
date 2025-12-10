@@ -2438,6 +2438,58 @@ def analyze():
         features_array = np.array(features).reshape(1, -1)
         print(f"Analysis with {len(features)} features: {features_array.shape}")
         
+        # CRITICAL: Validate feature count matches model's expected features
+        if ml_models['risk_model'] is not None:
+            # Check if model has n_features_in_ attribute (sklearn 0.24+)
+            if hasattr(ml_models['risk_model'], 'n_features_in_'):
+                expected_features = ml_models['risk_model'].n_features_in_
+            elif hasattr(ml_models['risk_model'], 'n_features_'):
+                expected_features = ml_models['risk_model'].n_features_
+            else:
+                # Try to infer from the model's estimator (for GridSearchCV)
+                if hasattr(ml_models['risk_model'], 'best_estimator_'):
+                    if hasattr(ml_models['risk_model'].best_estimator_, 'n_features_in_'):
+                        expected_features = ml_models['risk_model'].best_estimator_.n_features_in_
+                    elif hasattr(ml_models['risk_model'].best_estimator_, 'n_features_'):
+                        expected_features = ml_models['risk_model'].best_estimator_.n_features_
+                    else:
+                        expected_features = None
+                else:
+                    expected_features = None
+            
+            actual_features = features_array.shape[1]
+            
+            if expected_features is not None and actual_features != expected_features:
+                error_msg = (
+                    f"Feature count mismatch: Model expects {expected_features} features, "
+                    f"but received {actual_features} features. "
+                    f"This usually means the model was trained with a different feature set. "
+                    f"Please retrain the model using the 'Train Models' button in the dashboard."
+                )
+                print(f"ERROR - {error_msg}")
+                print(f"ERROR - Feature breakdown: {len(features)} total features")
+                print(f"ERROR -   Demographic: 11")
+                print(f"ERROR -   Male responses: {len(male_responses)}")
+                print(f"ERROR -   Female responses: {len(female_responses)}")
+                print(f"ERROR -   Personalized: 6")
+                return jsonify({
+                    'status': 'error',
+                    'message': error_msg,
+                    'details': {
+                        'expected_features': int(expected_features),
+                        'actual_features': int(actual_features),
+                        'feature_breakdown': {
+                            'demographic': 11,
+                            'male_responses': len(male_responses),
+                            'female_responses': len(female_responses),
+                            'personalized': 6,
+                            'total': len(features)
+                        }
+                    }
+                }), 400
+            elif expected_features is not None:
+                print(f"DEBUG - Feature count validation passed: {actual_features} features (expected: {expected_features})")
+        
         # HYBRID APPROACH: Calculate actual risk level from disagreement ratio AND use ML prediction
         # This helps catch cases where the model might be biased
         # Calculate actual disagreement ratio from male/female responses (more accurate)
@@ -2487,7 +2539,35 @@ def analyze():
         
         # Predict risk level using ML model
         if ml_models['risk_model'] is not None:
-            risk_prediction = ml_models['risk_model'].predict(features_array)[0]
+            try:
+                risk_prediction = ml_models['risk_model'].predict(features_array)[0]
+            except ValueError as e:
+                error_msg = str(e)
+                if 'features' in error_msg.lower() and 'expecting' in error_msg.lower():
+                    # Extract expected and actual feature counts from error message if possible
+                    print(f"ERROR - Prediction failed: {error_msg}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': (
+                            f"Model prediction failed: {error_msg}. "
+                            f"This usually means the model was trained with a different feature set. "
+                            f"Please retrain the model using the 'Train Models' button in the dashboard."
+                        ),
+                        'details': {
+                            'error': error_msg,
+                            'actual_features': int(features_array.shape[1]),
+                            'feature_breakdown': {
+                                'demographic': 11,
+                                'male_responses': len(male_responses),
+                                'female_responses': len(female_responses),
+                                'personalized': 6,
+                                'total': len(features)
+                            }
+                        }
+                    }), 400
+                else:
+                    # Re-raise if it's a different error
+                    raise
             risk_levels = ['Low', 'Medium', 'High']
             ml_risk_level = risk_levels[risk_prediction]
             print(f"DEBUG - ML risk prediction: {ml_risk_level} (index: {risk_prediction})")
@@ -2536,8 +2616,80 @@ def analyze():
         
         # Predict category scores with personalized adjustments
         if ml_models['category_model'] is not None:
-            category_scores = ml_models['category_model'].predict(features_array)[0]
-            category_scores = np.clip(category_scores, 0.0, 1.0)
+            # Validate feature count for category model as well
+            category_model = ml_models['category_model']
+            # For MultiOutputRegressor, check the underlying estimator
+            if hasattr(category_model, 'estimator'):
+                estimator = category_model.estimator
+                if hasattr(estimator, 'n_features_in_'):
+                    expected_features = estimator.n_features_in_
+                elif hasattr(estimator, 'n_features_'):
+                    expected_features = estimator.n_features_
+                else:
+                    expected_features = None
+            else:
+                # Direct model
+                if hasattr(category_model, 'n_features_in_'):
+                    expected_features = category_model.n_features_in_
+                elif hasattr(category_model, 'n_features_'):
+                    expected_features = category_model.n_features_
+                else:
+                    expected_features = None
+            
+            actual_features = features_array.shape[1]
+            
+            if expected_features is not None and actual_features != expected_features:
+                error_msg = (
+                    f"Category model feature count mismatch: Model expects {expected_features} features, "
+                    f"but received {actual_features} features. "
+                    f"This usually means the model was trained with a different feature set. "
+                    f"Please retrain the model using the 'Train Models' button in the dashboard."
+                )
+                print(f"ERROR - {error_msg}")
+                return jsonify({
+                    'status': 'error',
+                    'message': error_msg,
+                    'details': {
+                        'expected_features': int(expected_features),
+                        'actual_features': int(actual_features),
+                        'feature_breakdown': {
+                            'demographic': 11,
+                            'male_responses': len(male_responses),
+                            'female_responses': len(female_responses),
+                            'personalized': 6,
+                            'total': len(features)
+                        }
+                    }
+                }), 400
+            
+            try:
+                category_scores = ml_models['category_model'].predict(features_array)[0]
+                category_scores = np.clip(category_scores, 0.0, 1.0)
+            except ValueError as e:
+                error_msg = str(e)
+                if 'features' in error_msg.lower() and 'expecting' in error_msg.lower():
+                    print(f"ERROR - Category model prediction failed: {error_msg}")
+                    return jsonify({
+                        'status': 'error',
+                        'message': (
+                            f"Category model prediction failed: {error_msg}. "
+                            f"This usually means the model was trained with a different feature set. "
+                            f"Please retrain the model using the 'Train Models' button in the dashboard."
+                        ),
+                        'details': {
+                            'error': error_msg,
+                            'actual_features': int(features_array.shape[1]),
+                            'feature_breakdown': {
+                                'demographic': 11,
+                                'male_responses': len(male_responses),
+                                'female_responses': len(female_responses),
+                                'personalized': 6,
+                                'total': len(features)
+                            }
+                        }
+                    }), 400
+                else:
+                    raise
         else:
             return jsonify({
                 'status': 'error',
